@@ -8,7 +8,7 @@ asgiref==3.8.1
     # via -r typing.in
 cffi==1.17.1
     # via cryptography
-cryptography==43.0.3
+cryptography==44.0.1
     # via -r typing.in
 iniconfig==2.0.0
     # via pytest
