@@ -189,18 +189,18 @@ def copy_current_request_context(f: F) -> F:
 
     .. versionadded:: 0.10
     """
-    ctx = _cv_app.get(None)
+    # Store the context that was active when the decorator was applied.
+    original = _cv_app.get(None)
 
-    if ctx is None:
+    if original is None:
         raise RuntimeError(
             "'copy_current_request_context' can only be used when a"
             " request context is active, such as in a view function."
         )
 
-    ctx = ctx.copy()
-
     def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
-        with ctx:
+        # Copy the context before pushing, so each worker acts independently.
+        with original.copy() as ctx:
             return ctx.app.ensure_sync(f)(*args, **kwargs)
 
     return update_wrapper(wrapper, f)  # type: ignore[return-value]

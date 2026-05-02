@@ -1,16 +1,15 @@
+from __future__ import annotations
+
+import collections.abc as cabc
 import warnings
+from concurrent import futures
 
 import pytest
 
 import flask
-from flask.globals import app_ctx
 from flask.sessions import SecureCookieSessionInterface
 from flask.sessions import SessionInterface
-
-try:
-    from greenlet import greenlet
-except ImportError:
-    greenlet = None
+from flask.testing import FlaskClient
 
 
 def test_teardown_on_pop(app):
@@ -145,61 +144,34 @@ def test_manual_context_binding(app):
         index()
 
 
-@pytest.mark.skipif(greenlet is None, reason="greenlet not installed")
-class TestGreenletContextCopying:
-    def test_greenlet_context_copying(self, app, client):
-        greenlets = []
+def test_copy_context_thread(
+    request: pytest.FixtureRequest, app: flask.Flask, client: FlaskClient
+) -> None:
+    executor = futures.ThreadPoolExecutor(max_workers=2)
+    request.addfinalizer(lambda: executor.shutdown(cancel_futures=True))
+    result: cabc.Iterator[int] | None = None
 
-        @app.route("/")
-        def index():
-            flask.session["fizz"] = "buzz"
-            ctx = app_ctx.copy()
+    @app.route("/")
+    def index():
+        flask.session["fizz"] = "buzz"
 
-            def g():
-                assert not flask.request
-                assert not flask.current_app
-                with ctx:
-                    assert flask.request
-                    assert flask.current_app == app
-                    assert flask.request.path == "/"
-                    assert flask.request.args["foo"] == "bar"
-                    assert flask.session.get("fizz") == "buzz"
-                assert not flask.request
-                return 42
+        @flask.copy_current_request_context
+        def work(n: int) -> int:
+            assert flask.current_app == app
+            assert flask.request.path == "/"
+            assert flask.request.args["foo"] == "bar"
+            assert flask.session["fizz"] == "buzz"
+            return n
 
-            greenlets.append(greenlet(g))
-            return "Hello World!"
+        nonlocal result
+        result = executor.map(work, range(10))
+        return "Hello World!"
 
-        rv = client.get("/?foo=bar")
-        assert rv.data == b"Hello World!"
+    rv = client.get(query_string={"foo": "bar"})
+    assert rv.text == "Hello World!"
 
-        result = greenlets[0].run()
-        assert result == 42
-
-    def test_greenlet_context_copying_api(self, app, client):
-        greenlets = []
-
-        @app.route("/")
-        def index():
-            flask.session["fizz"] = "buzz"
-
-            @flask.copy_current_request_context
-            def g():
-                assert flask.request
-                assert flask.current_app == app
-                assert flask.request.path == "/"
-                assert flask.request.args["foo"] == "bar"
-                assert flask.session.get("fizz") == "buzz"
-                return 42
-
-            greenlets.append(greenlet(g))
-            return "Hello World!"
-
-        rv = client.get("/?foo=bar")
-        assert rv.data == b"Hello World!"
-
-        result = greenlets[0].run()
-        assert result == 42
+    assert result is not None
+    assert set(result) == set(range(10))
 
 
 def test_session_error_pops_context():
