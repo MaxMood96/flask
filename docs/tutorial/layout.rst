@@ -81,8 +81,7 @@ By the end, your project layout will look like this:
     │   ├── test_auth.py
     │   └── test_blog.py
     ├── .venv/
-    ├── pyproject.toml
-    └── MANIFEST.in
+    └── pyproject.toml
 
 If you're using version control, the following files that are generated
 while running your project should be ignored. There may be other files
@@ -102,9 +101,5 @@ write. For example, with git:
     .pytest_cache/
     .coverage
     htmlcov/
-
-    dist/
-    build/
-    *.egg-info/
 
 Continue to :doc:`factory`.
